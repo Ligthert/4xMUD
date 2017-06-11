@@ -1,0 +1,77 @@
+Players
+	id
+	username
+	password
+	displayname
+	description
+	score
+	capital (colony_id)
+
+Systems
+	id
+	name
+	x
+	y
+	z
+
+Planet
+	id
+	system
+	x
+	y
+	z
+	habitability
+	fertility
+	water
+	metal
+
+Colony
+	id
+	user
+	name
+	population
+	sick
+	employed
+
+Buildings
+	id
+	building
+	colony
+	amount
+
+Blueprint
+	id
+	name
+	inventor
+	type
+	efficiency
+	named
+
+Fleet
+	id
+	name
+	owner
+	x
+	y
+	z
+	system
+	status
+	mission
+	target (system,planet,colony,fleet,coord)
+	order (attack order: lh,hl)
+
+Ships
+	id
+	ship
+	fleet
+	colony
+	amount
+
+Designs
+	id
+	name
+	owner
+	hull
+	engine
+	armor
+	weapon ( 1 schip, 1 wapen )

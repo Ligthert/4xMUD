@@ -1,0 +1,68 @@
+Blueprint classes
+- hull
+- armor 
+- engine
+- guns
+- mine
+- hospital
+- farm
+- well
+
+Ship designs
+- hull weight/load capacity
+- armor slots
+- engine slots
+- gun slots
+
+colony build #buildingID #amount
+colony destroy #buildingID #amount
+colony disband
+colony set tax #
+colony construct $designID # 
+
+fleet #
+fleet # attack colony #
+fleet # attack fleet #
+fleet # transport colony #
+fleet # transport fleet #
+fleet # explore planet #
+fleet # move colony #
+fleet # move fleet #
+fleet # move colony #
+fleet # move #pos
+fleet # orbit #planetID
+fleet # scan
+
+fleet show #
+colony show #
+
+show fleets
+show fleet #
+show colonies
+show colony #
+show planets
+show planet #
+show research
+show blueprints
+show designs
+
+player
+player info #
+player search #
+
+planet #
+planet search $params
+
+research 
+research ($colonyID) $class #researchers #budget
+
+blueprints
+blueprints class $class
+
+design
+design delete #
+design #
+design create #hull #engine #armor #guns "name"
+
+system
+system #

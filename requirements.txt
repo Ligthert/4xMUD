@@ -1,0 +1,4 @@
+PyMySQL
+veryprettytable
+prettytable-extras
+jinja2
