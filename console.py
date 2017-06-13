@@ -32,6 +32,9 @@ sql_player_update_password = "UPDATE users SET password=%s WHERE id=%s"
 sql_player_update_description = "UPDATE users SET description=%s WHERE id=%s"
 sql_player_update_email = "UPDATE users set email=%s WHERE id=%s"
 sql_player_update_capital = "UPDATE users SET capital=%s WHERE id=%s"
+sql_colony_get = "SELECT * FROM colonies WHERE id=%s AND user=%s"
+sql_colony_list = "SELECT * FROM colonies WHERE user=%s"
+sql_colony_set_taxrate = "UPDATE colonies SET taxrate=%s WHERE id=%s"
 
 # Global stuff. Ugly, should work.
 pid = int()
@@ -83,9 +86,14 @@ def login():
 
   return user_id
 
-def colony_show(colony=0):
-  
-
+def colony_show(pid=0,colony=0):
+  if pid != 0:
+    print ("Do stuff")
+    # Check if colony is not 0
+    # Check if colony is owned by a player
+    # check if player capital is not 0
+  else:
+    print ("Syntax Error: No PID provided")
 
 # Do the CLI main loop
 class x4mud(cmd.Cmd):
@@ -171,7 +179,105 @@ class x4mud(cmd.Cmd):
     x.add_row(["player info <playername>","print player statistics and score"])
     print(x)
 
+  def do_colony(self, line):
+    params = line.split(" ")
+    length = len(params)
+    # print(length)
+    # print(params)
+    if length == 1 and params[0] == "":
 
+      x = prettytable.PrettyTable(["ID","Name","Population"])
+      x.align["ID"] = "l"
+      x.align["Name"] = "l"
+      x.align["Population"] = "l"
+      ret = cursor.execute(sql_colony_list,(pid))
+      if ret != 0:
+        retval = cursor.fetchall()
+        for colony in retval:
+          x.add_row([colony['id'],colony['name'],colony['population']])
+        print(x)
+      else:
+        print("No colonies")
+
+    elif length == 1 and params[0] != "":
+      # TODO Check of colony is owned by player
+      colony = params[0]
+      if colony.isnumeric():
+        # Check to see of the colony is yours
+        ret = cursor.execute(sql_colony_get,(colony,pid))
+        if ret != 0:
+            retval = cursor.fetchall()
+            retval = retval[0]
+            print(retval)
+            x=prettytable.PrettyTable(["Key","Value"])
+            x.align["Key"] = "l"
+            x.align["Value"] = "l"
+            x.add_row(["ID",retval['id']])
+            x.add_row(["Name",retval['name']])
+            x.add_row(["Population",retval['population']])
+            x.add_row(["Sick",retval['sick']])
+            x.add_row(["Employed",retval['employed']])
+            x.add_row(["Tax-Rate",retval['taxrate']])
+            print(x)
+        else:
+          print("Error: Requested colony is not yours (yet)")
+
+      else:
+        print("Error: Colony ID isn't a numeric")
+
+    # Enter the set-cycle
+    elif params[1] == "set":
+      # set taxrate
+      if params[2] == "taxrate":
+        colony = params[0]
+        taxrate = int(params[3])
+        if taxrate >= 0 and taxrate <=100:
+          cursor.execute(sql_colony_set_taxrate,(taxrate,colony))
+          db.commit()
+          print("Set taxrate (%) to: "+str(taxrate))
+        else:
+          print("Error: taxrate is not in 0-100")
+
+  def help_colony(this):
+    print("The colony command is to administrate most aspects of the colonies.")
+    x = prettytable.PrettyTable(["Command","Description"])
+    x.align["Command"] = "l"
+    x.align["Description"] = "l"
+    x.add_row(["colony","Returns a list of all player held colonies"])
+    x.add_row(["colony #","Show details of a single colony"])
+    x.add_row(["colony # set taxrate #","Set the taxrate of a colony"])
+    print(x)
+
+  def do_blueprints(this,line):
+    params = line.split(" ")
+    length = len(params)
+
+    if params[0] == "":
+      print("List stuff")
+
+    if params[0] == "class" and params[1].isnumeric():
+      if params[2] == "type" and params[3].isnumeric():
+        print("type stuff")
+    else:
+        print("class stuff")
+
+    if params[0] == "view" and params[1].isnumeric():
+      print("Do view stuff")
+
+    if params[0] == "delete" and params[1].isnumeric():
+      print("Delete stuff")
+
+  def help_blueprints(this):
+    print("The blueprints command allows the administration of blueprints from viewing, searching and deleting.")
+    x = prettytable.PrettyTable(["Command","Description"])
+    x.align["Command"] = "l"
+    x.align["Description"] = "l"
+    x.add_row(["blueprints","Returns a list of all blueprints owned by the player."])
+    x.add_row(["blueprints class #","Searches for all instances of class of blueprints. These can be: buildings"])
+    x.add_row(["blueprints class # type #","Searches for all instances of a class and type of blueprints."])
+    x.add_row(["blueprints view #","Review specs of a blueprint"])
+    x.add_row(["blueprints delete #","Deletes a blueprint"])
+    print(x)
 
   def do_EOF(self, line):
     f = open("motd_end")
