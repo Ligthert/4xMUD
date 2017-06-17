@@ -27,14 +27,28 @@ cursor = db.cursor()
 sql_auth_search = "SELECT count(*) as count FROM users WHERE username=%s"
 sql_auth_check = "SELECT id FROM users WHERE username=%s AND password=%s"
 sql_auth_create = "INSERT INTO users (username,password) VALUES (%s,%s)"
+
 sql_player_info = "SELECT * FROM users WHERE id=%s"
 sql_player_update_password = "UPDATE users SET password=%s WHERE id=%s"
 sql_player_update_description = "UPDATE users SET description=%s WHERE id=%s"
 sql_player_update_email = "UPDATE users set email=%s WHERE id=%s"
 sql_player_update_capital = "UPDATE users SET capital=%s WHERE id=%s"
+
 sql_colony_get = "SELECT * FROM colonies WHERE id=%s AND user=%s"
 sql_colony_list = "SELECT * FROM colonies WHERE user=%s"
 sql_colony_set_taxrate = "UPDATE colonies SET taxrate=%s WHERE id=%s"
+sql_colony_build_buildings = "INSERT INTO buildings (colony,blueprint) VALUES (%s,%s)"
+sql_colony_build_ships = ""
+
+sql_blueprints_list = "SELECT bp.* FROM blueprints_owned as bpo LEFT JOIN blueprints as bp ON bp.id=bpo.blueprint WHERE bpo.user=%s"
+sql_blueprints_view = "SELECT bp.* FROM blueprints_owned as bpo LEFT JOIN blueprints as bp ON bp.id=bpo.blueprint WHERE bpo.user=%s and bp.id=%s"
+sql_blueprints_delete = "DELETE FROM blueprints_owned WHERE user=%s AND blueprint=%s"
+sql_blueprints_class = "SELECT bp.* FROM blueprints_owned as bpo LEFT JOIN blueprints as bp ON bp.id=bpo.blueprint WHERE bpo.user=%s and bp.class=%s"
+sql_blueprints_type = "SELECT bp.* FROM blueprints_owned as bpo LEFT JOIN blueprints as bp ON bp.id=bpo.blueprint WHERE bpo.user=%s and bp.type=%s"
+
+# Variables we might need
+CLASSES = ["building"]
+TYPES = ["lab","well","mine","hospital","farm"]
 
 # Global stuff. Ugly, should work.
 pid = int()
@@ -238,6 +252,66 @@ class x4mud(cmd.Cmd):
         else:
           print("Error: taxrate is not in 0-100")
 
+    elif params[0].isnumeric() and params[1] == "buildings" and params[2].isnumeric() and params[3].isnumeric():
+      colony_id = params[0]
+      buildings = params[2]
+      amount = params[3]
+      blueprint = {}
+      colony = {}
+
+      colony_owned = 0
+      colony_blueprint = 0
+      colony_resources = 0
+      colony_credits = 0
+      colony_workers = 0
+      # Check if the colony exists and owned by the player
+      ret = cursor.execute(sql_colony_get, (colony_id,pid) )
+      if ret != 0:
+        colony_owned = ret
+        colony = cursor.fetchall()
+        colony = colony[0]
+      else:
+        print("Colony does not exist of belong to you.")
+      # Check if the blueprint exits and owned by the player
+      ret = cursor.execute(sql_blueprints_view, (pid, buildings))
+      if colony_owned != 0 and ret != 0:
+        colony_blueprint = ret
+        blueprint = cursor.fetchall()
+        blueprint = blueprint[0]
+      else:
+        print("Blueprint not found")
+
+      # Check if there is enough money to build the buildings
+      ret = cursor.execute(sql_player_info, (pid))
+      player = cursor.fetchall()
+      player = player[0]
+      print(player)
+      print(blueprint)
+      print(colony)
+      if int(blueprint['price'] * int(amount)) <= player['credits']:
+        colony_credits = blueprint['price'] * amount # Store this for later
+      else:
+        print("There isn't enough budget to complete this project.")
+
+      # Check if there are enough resources to build the buildings
+      if ( (blueprint['metal'] * int(amount)) <= colony['metal']) and ( (blueprint['water'] * int(amount)) <= colony['water'] ):
+        colony_resources = 1;
+      else:
+        print("There are insufficient resources available at the colony to complete this project.")
+
+      # Check if there are enough unemployed and healthy people for the buildings
+      if int(blueprint['power'] * amount) <= (colony['population'] - colony['employed'] - colony['sick']):
+        colony_workers = blueprint['power'] * amount
+
+
+      if colony_owned != 0 and colony_blueprint != 0 and colony_resources != 0 and colony_credits != 0 and colony_workers != 0:
+        # Reduce player credits
+        # Reduce colony resources
+        # Increase colony employed 
+        print("Building "+amount+" buildings")
+
+      print("Do magic stuff")
+
   def help_colony(this):
     print("The colony command is to administrate most aspects of the colonies.")
     x = prettytable.PrettyTable(["Command","Description"])
@@ -246,26 +320,71 @@ class x4mud(cmd.Cmd):
     x.add_row(["colony","Returns a list of all player held colonies"])
     x.add_row(["colony #","Show details of a single colony"])
     x.add_row(["colony # set taxrate #","Set the taxrate of a colony"])
+    x.add_row(["colony # buildings X Y","Build Y amount of building X"])
+    x.add_row(["colony # ships X Y","Build Y amount of X ships"])
     print(x)
 
   def do_blueprints(this,line):
     params = line.split(" ")
     length = len(params)
 
-    if params[0] == "":
-      print("List stuff")
+    # print(params)
+    # print(length)
 
-    if params[0] == "class" and params[1].isnumeric():
-      if params[2] == "type" and params[3].isnumeric():
-        print("type stuff")
-    else:
-        print("class stuff")
+    if params[0] == "":
+      ret = cursor.execute(sql_blueprints_list,(pid))
+      blueprints = cursor.fetchall()
+      x = prettytable.PrettyTable(["ID","Inventor","Name","Price (credits)"])
+      x.align["ID"] = "l"
+      x.align["Inventor"] = "l"
+      x.align["Name"] = "l"
+      x.align["Price (credits)"] = "l"
+      for blueprint in blueprints:
+        x.add_row([blueprint['id'],blueprint['inventor'],blueprint['name'],blueprint['price']])
+      print(x)
+
+    if params[0] == "class" and params[1] != "":
+      search_class = params[1]
+      if search_class in CLASSES:
+        ret = cursor.execute(sql_blueprints_class, (pid,search_class) )
+        if ret != 0:
+          bp = cursor.fetchall()
+          print(bp)
+        else:
+          print("No blueprints found of this class.")
+      else:
+        print("Invalid class: "+search_class)
+
+    if params[0] == "type" and params[1] != "":
+      search_type = params[1]
+      if search_type in TYPES:
+        ret = cursor.execute(sql_blueprints_type, (pid,search_type) )
+        if ret != 0:
+          bp = cursor.fetchall()
+          print(bp)
+        else:
+          print("No blueprints found of this class.")
+      else:
+        print("Invalid class: "+type_class)
 
     if params[0] == "view" and params[1].isnumeric():
-      print("Do view stuff")
+      bp = params[1]
+      ret = cursor.execute( sql_blueprints_view,(pid,bp) )
+      if ret!=0:
+        bp = cursor.fetchall()
+        print(bp)
+      else:
+        print("No blueprints found with this ID")
 
     if params[0] == "delete" and params[1].isnumeric():
       print("Delete stuff")
+      bp = params [1]
+      ret = cursor.execute( sql_blueprints_delete, (pid,bp) )
+      if ret == 1:
+        db.commit()
+        print("Blueprint ("+bp+") deleted.")
+      else:
+        print("Blueprint not deleted.")
 
   def help_blueprints(this):
     print("The blueprints command allows the administration of blueprints from viewing, searching and deleting.")
@@ -274,7 +393,7 @@ class x4mud(cmd.Cmd):
     x.align["Description"] = "l"
     x.add_row(["blueprints","Returns a list of all blueprints owned by the player."])
     x.add_row(["blueprints class #","Searches for all instances of class of blueprints. These can be: buildings"])
-    x.add_row(["blueprints class # type #","Searches for all instances of a class and type of blueprints."])
+    x.add_row(["blueprints type #","Searches for all instances of a class and type of blueprints."])
     x.add_row(["blueprints view #","Review specs of a blueprint"])
     x.add_row(["blueprints delete #","Deletes a blueprint"])
     print(x)
