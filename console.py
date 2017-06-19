@@ -40,6 +40,7 @@ sql_player_credits_rem = "UPDATE users SET credits = credits - %s WHERE id=%s"
 sql_colony_get = "SELECT * FROM colonies WHERE id=%s AND user=%s"
 sql_colony_list = "SELECT * FROM colonies WHERE user=%s"
 sql_colony_set_taxrate = "UPDATE colonies SET taxrate=%s WHERE id=%s"
+sql_colony_build_buildings_fetch = "SELECT * FROM buildings WHERE colony=%s"
 sql_colony_build_buildings_check = "SELECT * FROM buildings WHERE colony=%s and blueprint=%s"
 sql_colony_build_buildings_insert = "INSERT INTO buildings (colony,blueprint,amount) VALUES (%s,%s,%s)"
 sql_colony_build_buildings_add = "UPDATE buildings SET amount = amount + %s WHERE colony=%s and blueprint=%s"
@@ -227,7 +228,6 @@ class x4mud(cmd.Cmd):
         print("No colonies")
 
     elif length == 1 and params[0] != "":
-      # TODO Check of colony is owned by player
       colony = params[0]
       if colony.isnumeric():
         # Check to see of the colony is yours
@@ -245,7 +245,33 @@ class x4mud(cmd.Cmd):
             x.add_row(["Sick",retval['sick']])
             x.add_row(["Employed",retval['employed']])
             x.add_row(["Tax-Rate",retval['taxrate']])
+            x.add_row(["Food",retval['food']])
+            x.add_row(["Metal",retval['metal']])
+            x.add_row(["Water",retval['water']])
             print(x)
+
+            ret = cursor.execute( sql_colony_build_buildings_fetch, (colony) )
+            if ret != 0:
+              # Print buildings with the colony
+              buildings = cursor.fetchall()
+              x=prettytable.PrettyTable(["ID","Name","Amount","Employees","Efficiency"])
+              x.align["ID"] = "l"
+              x.align["Name"] = "l"
+              x.align["Amount"] = "l"
+              x.align["Employees"] = "l"
+              x.align["Efficiency"] = "l"
+              for building in buildings:
+                ret_bp = cursor.execute( sql_blueprints_view, (pid,building['blueprint']) )
+                blueprint = cursor.fetchall()
+                blueprint = blueprint[0]
+                x.add_row( [ building['blueprint'],
+                  blueprint['name'],
+                  building['amount'],
+                  int(building['amount']) * int(blueprint['power']),
+                  blueprint['efficiency'] ] )
+
+              print("This colony has the following buildings:")
+              print(x)
         else:
           print("Error: Requested colony is not yours (yet)")
 
