@@ -20,6 +20,7 @@ db = pymysql.connect(host=config['database']['hostname'],
   db=config['database']['database'],
   cursorclass=pymysql.cursors.DictCursor)
   # Because 2 spaces are better than one tab
+db.autocommit(True)
 
 cursor = db.cursor()
 
@@ -33,12 +34,24 @@ sql_player_update_password = "UPDATE users SET password=%s WHERE id=%s"
 sql_player_update_description = "UPDATE users SET description=%s WHERE id=%s"
 sql_player_update_email = "UPDATE users set email=%s WHERE id=%s"
 sql_player_update_capital = "UPDATE users SET capital=%s WHERE id=%s"
+sql_player_credits_add = "UPDATE users SET credits = credits + %s WHERE id=%s"
+sql_player_credits_rem = "UPDATE users SET credits = credits - %s WHERE id=%s"
 
 sql_colony_get = "SELECT * FROM colonies WHERE id=%s AND user=%s"
 sql_colony_list = "SELECT * FROM colonies WHERE user=%s"
 sql_colony_set_taxrate = "UPDATE colonies SET taxrate=%s WHERE id=%s"
-sql_colony_build_buildings = "INSERT INTO buildings (colony,blueprint) VALUES (%s,%s)"
+sql_colony_build_buildings_check = "SELECT * FROM buildings WHERE colony=%s and blueprint=%s"
+sql_colony_build_buildings_insert = "INSERT INTO buildings (colony,blueprint,amount) VALUES (%s,%s,%s)"
+sql_colony_build_buildings_add = "UPDATE buildings SET amount = amount + %s WHERE colony=%s and blueprint=%s"
+sql_colony_build_buildings_rem = "UPDATE buildings SET amount = amount - %s WHERE colony=%s and blueprint=%s"
+sql_colony_build_buildings_del = "DELETE FROM buildings WHERE colony=%s and blueprint=%s"
 sql_colony_build_ships = ""
+sql_colony_metal_add = "UPDATE colonies SET metal = metal + %s WHERE id=%s"
+sql_colony_metal_rem = "UPDATE colonies SET metal = metal - %s WHERE id=%s"
+sql_colony_water_add = "UPDATE colonies SET water = water + %s WHERE id=%s"
+sql_colony_water_rem = "UPDATE colonies SET water = water - %s WHERE id=%s"
+sql_colony_employment_rem = "UPDATE colonies set employed = employed - %s WHERE id=%s"
+sql_colony_employment_add = "UPDATE colonies set employed = employed + %s WHERE id=%s"
 
 sql_blueprints_list = "SELECT bp.* FROM blueprints_owned as bpo LEFT JOIN blueprints as bp ON bp.id=bpo.blueprint WHERE bpo.user=%s"
 sql_blueprints_view = "SELECT bp.* FROM blueprints_owned as bpo LEFT JOIN blueprints as bp ON bp.id=bpo.blueprint WHERE bpo.user=%s and bp.id=%s"
@@ -285,11 +298,11 @@ class x4mud(cmd.Cmd):
       ret = cursor.execute(sql_player_info, (pid))
       player = cursor.fetchall()
       player = player[0]
-      print(player)
-      print(blueprint)
-      print(colony)
+      # print(player)
+      # print(blueprint)
+      # print(colony)
       if int(blueprint['price'] * int(amount)) <= player['credits']:
-        colony_credits = blueprint['price'] * amount # Store this for later
+        colony_credits = int(blueprint['price']) * int(amount) # Store this for later
       else:
         print("There isn't enough budget to complete this project.")
 
@@ -301,16 +314,61 @@ class x4mud(cmd.Cmd):
 
       # Check if there are enough unemployed and healthy people for the buildings
       if int(blueprint['power'] * amount) <= (colony['population'] - colony['employed'] - colony['sick']):
-        colony_workers = blueprint['power'] * amount
+        colony_workers = blueprint['power'] * int(amount)
 
 
       if colony_owned != 0 and colony_blueprint != 0 and colony_resources != 0 and colony_credits != 0 and colony_workers != 0:
         # Reduce player credits
+        ret = cursor.execute(sql_player_credits_rem, (colony_credits,pid) )
         # Reduce colony resources
-        # Increase colony employed 
-        print("Building "+amount+" buildings")
+        ret = cursor.execute(sql_colony_metal_rem, (blueprint['metal'] * int(amount),colony_id) )
+        ret = cursor.execute(sql_colony_water_rem, (blueprint['water'] * int(amount),colony_id) )
+        # Increase colony employed
+        ret = cursor.execute(sql_colony_employment_rem, (int(blueprint['power'] * amount), colony_id) )
 
-      print("Do magic stuff")
+        print("Building "+amount+" x "+blueprint['name']+" in colony "+colony['name'])
+        ret = cursor.execute(sql_colony_build_buildings_check, (colony_id,blueprint['id']))
+        if ret != 0:
+          cursor.execute( sql_colony_build_buildings_add, ( int(amount), colony_id, blueprint['id'] ) )
+        else:
+          cursor.execute(sql_colony_build_buildings_insert, (colony_id,blueprint['id'],int(amount)))
+
+    elif params[0].isnumeric() and params[1] == "demolish" and params[2].isnumeric() and params[3].isnumeric():
+      colony_id = params[0]
+      buildings = params[2]
+      amount = int(params[3])
+      colony = {}
+      colony_owned = 0
+
+      # Check if colony is owned by player
+      # Check if colony has buildings of type
+      # if colony > buildings:
+      #   UPDATE
+      # elif buildings >= colony:
+      #   DELETE
+      ret = cursor.execute(sql_colony_get, (colony_id,pid) )
+      if ret != 0:
+        colony_owned = ret
+        colony = cursor.fetchall()
+        colony = colony[0]
+      else:
+        print("Colony does not exist of belong to you.")
+
+      ret = cursor.execute(sql_colony_build_buildings_check, (colony_id,buildings))
+      if ret!=0:
+        retval = cursor.fetchall()
+        structures = retval[0]
+        if structures['amount'] > amount:
+          cursor.execute( sql_colony_build_buildings_rem, ( amount, colony_id, buildings ) )
+          print(str(amount) + " buildings of the type "+str(buildings)+" have been demolished.")
+        else:
+          cursor.execute( sql_colony_build_buildings_del, ( colony_id, buildings ) )
+          print(str(structures['amount']) + " buildings of the type "+str(buildings)+" have been demolished.")
+
+      else:
+        print("No such buldings exist in this colony.")
+
+
 
   def help_colony(this):
     print("The colony command is to administrate most aspects of the colonies.")
@@ -320,7 +378,8 @@ class x4mud(cmd.Cmd):
     x.add_row(["colony","Returns a list of all player held colonies"])
     x.add_row(["colony #","Show details of a single colony"])
     x.add_row(["colony # set taxrate #","Set the taxrate of a colony"])
-    x.add_row(["colony # buildings X Y","Build Y amount of building X"])
+    x.add_row(["colony # buildings X Y","Build Y amount of X building at colony."])
+    x.add_row(["colony # demolish X Y","Demolish Y amount of X buildings at colony."])
     x.add_row(["colony # ships X Y","Build Y amount of X ships"])
     print(x)
 
